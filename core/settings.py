@@ -21,6 +21,8 @@ import os
 load_dotenv()  # Automatically finds .env file
 django_secret_key = os.getenv('DJANGO_SECRET_KEY')
 openwebui_api_key = os.getenv('OPENWEBUI_API_KEY')
+moodle_shared_secret = os.getenv('MOODLE_SHARED_SECRET')
+moodle_consumer_key = os.getenv('MOODLE_CONSUMER_KEY')
 
 
 # Quick-start development settings - unsuitable for production
@@ -29,10 +31,18 @@ openwebui_api_key = os.getenv('OPENWEBUI_API_KEY')
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = django_secret_key
 
+PYLTI_CONFIG = {
+    'consumers': {
+        moodle_consumer_key: {
+            'secret': moodle_shared_secret
+        }
+    }
+}
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 
 # Application definition
@@ -44,6 +54,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'lti_tool',
 ]
 
 MIDDLEWARE = [
@@ -77,13 +88,15 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Allow Moodle to render Django inside an iFrame
 X_FRAME_OPTIONS = 'ALLOWALL'
-# Required if serving over HTTPS (standard for LTI 1.3)
-SESSION_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SECURE = True  
+# Required when served in an iframe from Moodle.
+SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'None')
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
+CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'None')
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
 
 # Open WebUI API configuration
-OPENWEBUI_API_URL = "http://localhost:3000/api/v1"
 OPENWEBUI_API_KEY = openwebui_api_key
+OPENWEBUI_URL = os.getenv('OPENWEBUI_URL', 'http://localhost:3000')
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases

@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import time
 from typing import Dict
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from django.conf import settings
 from django.core.cache import cache
@@ -44,9 +44,7 @@ def _normalized_params(params: Dict[str, str]) -> str:
 
 
 def _signature_base_string(request: HttpRequest, params: Dict[str, str]) -> str:
-	scheme = 'https' if request.is_secure() else 'http'
-	host = request.get_host().lower()
-	path = request.path
+	scheme, host, path = _normalized_launch_url_parts(request)
 	normalized_url = f'{scheme}://{host}{path}'
 	method = request.method.upper()
 	normalized_params = _normalized_params(params)
@@ -57,6 +55,36 @@ def _signature_base_string(request: HttpRequest, params: Dict[str, str]) -> str:
 			_oauth_percent_encode(normalized_params),
 		]
 	)
+
+
+def _normalized_launch_url_parts(request: HttpRequest) -> tuple[str, str, str]:
+	external_launch_url = getattr(settings, 'LTI_EXTERNAL_LAUNCH_URL', '')
+	if external_launch_url:
+		parsed = urlparse(external_launch_url)
+		scheme = (parsed.scheme or 'https').lower()
+		host = parsed.netloc.lower()
+		path = parsed.path or request.path
+		return scheme, host, path
+
+	trust_proxy_headers = getattr(settings, 'LTI_TRUST_PROXY_HEADERS', True)
+	if trust_proxy_headers:
+		forwarded_proto = request.META.get('HTTP_X_FORWARDED_PROTO', '')
+		if forwarded_proto:
+			scheme = forwarded_proto.split(',')[0].strip().lower()
+		else:
+			scheme = 'https' if request.is_secure() else 'http'
+
+		forwarded_host = request.META.get('HTTP_X_FORWARDED_HOST', '')
+		if forwarded_host:
+			host = forwarded_host.split(',')[0].strip().lower()
+		else:
+			host = request.get_host().lower()
+	else:
+		scheme = 'https' if request.is_secure() else 'http'
+		host = request.get_host().lower()
+
+	path = request.path
+	return scheme, host, path
 
 
 def _sign_hmac_sha1(base_string: str, consumer_secret: str) -> str:

@@ -23,8 +23,11 @@ def _normalized_params(payload: dict[str, str]) -> str:
 	return '&'.join(f'{k}={v}' for k, v in items)
 
 
-def _make_signature(payload: dict[str, str], consumer_secret: str) -> str:
-	base_url = 'http://testserver/lti/launch/'
+def _make_signature(
+	payload: dict[str, str],
+	consumer_secret: str,
+	base_url: str = 'http://testserver/lti/launch/',
+) -> str:
 	base_string = '&'.join(
 		[
 			_pct('POST'),
@@ -84,3 +87,42 @@ class LTILaunchTests(TestCase):
 
 		self.assertEqual(response.status_code, 400)
 		self.assertContains(response, 'OAuth signature validation failed.', status_code=400)
+
+	@override_settings(
+		PYLTI_CONFIG={'consumers': {'moodle_key': {'secret': 'test-secret'}}},
+		LTI_TRUST_PROXY_HEADERS=True,
+	)
+	def test_valid_lti_launch_with_forwarded_https_headers(self):
+		payload = self._launch_payload()
+		payload['oauth_signature'] = _make_signature(
+			payload,
+			'test-secret',
+			'https://lti.example.edu/lti/launch/',
+		)
+
+		response = self.client.post(
+			reverse('lti_tool:launch'),
+			data=payload,
+			HTTP_X_FORWARDED_PROTO='https',
+			HTTP_X_FORWARDED_HOST='lti.example.edu',
+		)
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.url, reverse('lti_tool:chat'))
+
+	@override_settings(
+		PYLTI_CONFIG={'consumers': {'moodle_key': {'secret': 'test-secret'}}},
+		LTI_EXTERNAL_LAUNCH_URL='https://lti.example.edu/lti/launch/',
+	)
+	def test_valid_lti_launch_with_external_launch_url_override(self):
+		payload = self._launch_payload()
+		payload['oauth_signature'] = _make_signature(
+			payload,
+			'test-secret',
+			'https://lti.example.edu/lti/launch/',
+		)
+
+		response = self.client.post(reverse('lti_tool:launch'), data=payload)
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.url, reverse('lti_tool:chat'))

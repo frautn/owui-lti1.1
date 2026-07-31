@@ -88,11 +88,18 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Allow Moodle to render Django inside an iFrame
 X_FRAME_OPTIONS = 'ALLOWALL'
+# Reverse proxy support for HTTPS + forwarded host in production.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 # Required when served in an iframe from Moodle.
 SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'None')
 SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
 CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'None')
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
+
+# LTI launch URL normalization behavior behind proxies.
+LTI_TRUST_PROXY_HEADERS = os.getenv('LTI_TRUST_PROXY_HEADERS', 'True').lower() == 'true'
+LTI_EXTERNAL_LAUNCH_URL = os.getenv('LTI_EXTERNAL_LAUNCH_URL', '')
 
 # Open WebUI API configuration
 OPENWEBUI_API_KEY = openwebui_api_key

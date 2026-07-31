@@ -22,6 +22,13 @@ Required values:
 - `MOODLE_SHARED_SECRET`
 - `OPENWEBUI_URL` (for example `http://localhost:3000`)
 
+Optional production values for reverse proxy deployments:
+
+- `LTI_TRUST_PROXY_HEADERS` (default `True`)
+- `LTI_EXTERNAL_LAUNCH_URL` (for example `https://lti.example.edu/lti/launch/`)
+
+Use `LTI_EXTERNAL_LAUNCH_URL` when Moodle signs launches against a public URL that differs from the internal Django URL seen by the app.
+
 ## Run
 
 ```bash

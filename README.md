@@ -20,7 +20,10 @@ Required values:
 - `DJANGO_SECRET_KEY`
 - `MOODLE_CONSUMER_KEY` (default is `moodle_key`)
 - `MOODLE_SHARED_SECRET`
-- `OPENWEBUI_URL` (for example `http://localhost:3000`)
+- `OPENWEBUI_URL`:
+    - when developing with local server, use example `http://localhost:3000`
+    - production: `https://example.webui.com`
+    - It's important to use the actual Open WebUI url (the one that users can log in), and not the url used for the Django Api middleware.
 
 Optional production values for reverse proxy deployments:
 

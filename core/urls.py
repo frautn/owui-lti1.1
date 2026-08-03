@@ -20,4 +20,6 @@ from django.urls import include, path
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('lti/', include('lti_tool.urls')),
+    # Accept deployments where the reverse proxy forwards the /django prefix.
+    path('django/lti/', include('lti_tool.urls')),
 ]

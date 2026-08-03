@@ -104,6 +104,10 @@ LTI_EXTERNAL_LAUNCH_URL = os.getenv('LTI_EXTERNAL_LAUNCH_URL', '')
 # Open WebUI API configuration
 OPENWEBUI_API_KEY = openwebui_api_key
 OPENWEBUI_URL = os.getenv('OPENWEBUI_URL', 'http://localhost:3000')
+OPENWEBUI_TRUSTED_EMAIL_HEADER = os.getenv('OPENWEBUI_TRUSTED_EMAIL_HEADER', '')
+OPENWEBUI_TRUSTED_NAME_HEADER = os.getenv('OPENWEBUI_TRUSTED_NAME_HEADER', '')
+OPENWEBUI_TRUSTED_ROLE_HEADER = os.getenv('OPENWEBUI_TRUSTED_ROLE_HEADER', '')
+OPENWEBUI_AUTOLOGIN_PASSWORD = os.getenv('OPENWEBUI_AUTOLOGIN_PASSWORD', '')
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -147,8 +151,13 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
+# Force Django to generate internal URLs with /django prefix
+FORCE_SCRIPT_NAME = '/django'
 
-STATIC_URL = 'static/'
+# Static files
+STATIC_URL = '/django/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Media files
+MEDIA_URL = '/django/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+

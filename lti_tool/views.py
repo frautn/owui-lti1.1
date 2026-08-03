@@ -3,9 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import time
 from typing import Dict
 from urllib.parse import quote, urlparse
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.cache import cache
@@ -147,6 +150,116 @@ def _verify_signature(request: HttpRequest, params: Dict[str, str]) -> bool:
 	return hmac.compare_digest(expected_signature, params['oauth_signature'])
 
 
+def _build_openwebui_auth_url() -> str:
+	base = settings.OPENWEBUI_URL.rstrip('/')
+	return f'{base}/auth?redirect=/'
+
+
+def _derive_lti_identity(launch_data: dict) -> tuple[str, str]:
+	email = (launch_data.get('lis_person_contact_email_primary') or '').strip().lower()
+	if not email:
+		user_id = (launch_data.get('user_id') or 'lti-user').strip().lower()
+		email = f'{user_id}@lti.local'
+
+	name = (launch_data.get('lis_person_name_full') or '').strip()
+	if not name:
+		name = launch_data.get('user_id') or 'LTI User'
+
+	return email, name
+
+
+def _openwebui_error_detail(exc: HTTPError) -> str:
+	try:
+		error_payload = json.loads(exc.read().decode('utf-8'))
+		detail = error_payload.get('detail')
+		if detail:
+			return str(detail)
+	except Exception:
+		pass
+	return f'HTTP {exc.code}'
+
+
+def _openwebui_signin_request(endpoint: str, headers: dict[str, str], body: dict) -> tuple[str | None, str | None]:
+	request_body = json.dumps(body).encode('utf-8')
+	request = Request(endpoint, data=request_body, headers=headers, method='POST')
+
+	try:
+		with urlopen(request, timeout=8) as response:
+			payload = json.loads(response.read().decode('utf-8'))
+	except HTTPError as exc:
+		return None, _openwebui_error_detail(exc)
+	except URLError as exc:
+		return None, f'OpenWebUI is unreachable: {exc.reason}'
+	except Exception:
+		return None, 'OpenWebUI sign-in failed due to an unexpected error.'
+
+	token = payload.get('token')
+	if not token:
+		return None, 'OpenWebUI sign-in succeeded but no token was returned.'
+
+	return token, None
+
+
+def _openwebui_signin(email: str, name: str, role: str) -> tuple[str | None, str | None]:
+	endpoint = f"{settings.OPENWEBUI_URL.rstrip('/')}/api/v1/auths/signin"
+	trusted_email_header = getattr(settings, 'OPENWEBUI_TRUSTED_EMAIL_HEADER', '').strip()
+	trusted_name_header = getattr(settings, 'OPENWEBUI_TRUSTED_NAME_HEADER', '').strip()
+	trusted_role_header = getattr(settings, 'OPENWEBUI_TRUSTED_ROLE_HEADER', '').strip()
+	autologin_password = getattr(settings, 'OPENWEBUI_AUTOLOGIN_PASSWORD', '')
+
+	headers = {'Content-Type': 'application/json'}
+	body = {
+		'email': email,
+		'password': autologin_password,
+	}
+
+	if trusted_email_header:
+		headers[trusted_email_header] = email
+		if trusted_name_header:
+			headers[trusted_name_header] = name
+		if trusted_role_header:
+			headers[trusted_role_header] = role
+	elif not autologin_password:
+		return None, 'OpenWebUI auto-login is not configured (missing trusted header mode and fallback password).'
+
+	token, error = _openwebui_signin_request(endpoint, headers, body)
+	if token:
+		return token, None
+
+	# If trusted-header mode is configured but not active in OpenWebUI, try password fallback.
+	if trusted_email_header and autologin_password and error and 'email or password' in error.lower():
+		fallback_headers = {'Content-Type': 'application/json'}
+		fallback_body = {'email': email, 'password': autologin_password}
+		fallback_token, fallback_error = _openwebui_signin_request(
+			endpoint,
+			fallback_headers,
+			fallback_body,
+		)
+		if fallback_token:
+			return fallback_token, None
+		if fallback_error:
+			return None, f'OpenWebUI sign-in failed: {fallback_error}'
+
+	if trusted_email_header and not autologin_password and error and 'email or password' in error.lower():
+		return (
+			None,
+			'OpenWebUI trusted-header auth appears inactive. Enable trusted header auth in OpenWebUI '
+			f'or set OPENWEBUI_AUTOLOGIN_PASSWORD. Original error: {error}',
+		)
+
+	if error:
+		return None, f'OpenWebUI sign-in failed: {error}'
+
+	return None, 'OpenWebUI sign-in failed for an unknown reason.'
+
+
+def _can_set_openwebui_cookie(request: HttpRequest, openwebui_url: str) -> bool:
+	request_host = request.get_host().split(':')[0].lower()
+	parsed = urlparse(openwebui_url)
+	openwebui_host = (parsed.hostname or '').lower()
+	return bool(openwebui_host and openwebui_host == request_host)
+
+
 @csrf_exempt
 def launch(request: HttpRequest) -> HttpResponse:
 	if request.method != 'POST':
@@ -184,11 +297,35 @@ def chat(request: HttpRequest) -> HttpResponse:
 	if not launch_data:
 		return HttpResponseBadRequest('No active LTI launch session found.')
 
+	role = 'admin' if 'Instructor' in launch_data.get('roles', '') else 'user'
+	email, name = _derive_lti_identity(launch_data)
+	token, login_error = _openwebui_signin(email, name, role)
+	can_set_cookie = _can_set_openwebui_cookie(request, settings.OPENWEBUI_URL)
+
+	if token and not can_set_cookie:
+		login_error = (
+			'OpenWebUI token was created, but browser cookie handoff is blocked because '
+			'OPENWEBUI_URL uses a different host than this LTI app.'
+		)
+
 	context = {
-		'openwebui_url': settings.OPENWEBUI_URL,
+		'openwebui_auth_url': _build_openwebui_auth_url(),
+		'autologin_error': login_error,
 		'lti_user': launch_data,
 	}
-	return render(request, 'lti_tool/chat.html', context)
+	response = render(request, 'lti_tool/chat.html', context)
+
+	if token and can_set_cookie:
+		response.set_cookie(
+			key='token',
+			value=token,
+			path='/',
+			samesite='None',
+			secure=True,
+			httponly=False,
+		)
+
+	return response
 
 
 def health(request: HttpRequest) -> JsonResponse:

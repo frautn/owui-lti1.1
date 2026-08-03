@@ -22,6 +22,18 @@ Required values:
 - `MOODLE_SHARED_SECRET`
 - `OPENWEBUI_URL` (for example `http://localhost:3000`)
 
+Optional values for OpenWebUI auto sign-in from LTI launch:
+
+- `OPENWEBUI_TRUSTED_EMAIL_HEADER` (for example `X-Forwarded-Email`)
+- `OPENWEBUI_TRUSTED_NAME_HEADER` (for example `X-Forwarded-Name`)
+- `OPENWEBUI_TRUSTED_ROLE_HEADER` (for example `X-Forwarded-Role`)
+- `OPENWEBUI_AUTOLOGIN_PASSWORD` (fallback password mode when trusted-header mode is not enabled)
+
+Notes:
+
+- Best practice is trusted-header mode in OpenWebUI, so each LTI user gets their own OpenWebUI account automatically.
+- Cookie handoff only works when Django and OpenWebUI are on the same host name (ports can differ).
+
 Optional production values for reverse proxy deployments:
 
 - `LTI_TRUST_PROXY_HEADERS` (default `True`)

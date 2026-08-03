@@ -1,9 +1,15 @@
-# Django LTI 1.1 External Tool for OpenWebUI
+# Django LTI 1.1 External Tool Middleware for OpenWebUI
 
 v0.1
 
-Minimal Django project that accepts an LTI 1.1 launch from Moodle and opens OpenWebUI chat inside an iframe.
+Minimal Django project that acts as Middleware, accepts an LTI 1.1 launch from Moodle and opens OpenWebUI chat inside an iframe.
 
+
+## Prerequisites
+
+You need an Open WebUI server. 
+
+Check `https://github.com/frautn/open-webui-chat-simplified/pkgs/container/open-webui-chat-simplified` for a custom docker images that shows a simplified chat page, stripped of possible unwanted features.
 
 ## Install
 
@@ -20,7 +26,10 @@ Required values:
 - `DJANGO_SECRET_KEY`
 - `MOODLE_CONSUMER_KEY` (default is `moodle_key`)
 - `MOODLE_SHARED_SECRET`
-- `OPENWEBUI_URL` (for example `http://localhost:3000`)
+- `OPENWEBUI_URL`:
+    - when developing with local server, use example `http://localhost:3000`
+    - production: `https://example.webui.com`
+    - It's important to use the actual Open WebUI url (the one that users can log in), and not the url used for the Django Api middleware.
 
 Optional values for OpenWebUI auto sign-in from LTI launch:
 

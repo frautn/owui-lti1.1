@@ -266,20 +266,24 @@ def _can_set_openwebui_cookie(request: HttpRequest, openwebui_url: str) -> bool:
 @csrf_exempt
 def launch(request: HttpRequest) -> HttpResponse:
 	if request.method != 'POST':
-		return HttpResponseBadRequest('LTI launch must be a POST request.')
+		return HttpResponse(
+			'This endpoint expects an LTI launch POST request from Moodle. Open the tool from Moodle to start it.',
+			content_type='text/plain',
+			status=200,
+		)
 
 	params = {k: v for k, v in request.POST.items()}
 	validation_error = _launch_validation_error(params)
 	if validation_error:
-		return HttpResponseBadRequest(validation_error)
+		return HttpResponse(f'Invalid LTI launch: {validation_error}', content_type='text/plain', status=200)
 
 	if not _verify_signature(request, params):
-		return HttpResponseBadRequest('OAuth signature validation failed.')
+		return HttpResponse('OAuth signature validation failed.', content_type='text/plain', status=200)
 
 	if not _validate_nonce(
 		params['oauth_consumer_key'], params['oauth_nonce'], params['oauth_timestamp']
 	):
-		return HttpResponseBadRequest('OAuth nonce already used.')
+		return HttpResponse('OAuth nonce already used.', content_type='text/plain', status=200)
 
 	request.session['lti_launch'] = {
 		'consumer_key': params.get('oauth_consumer_key'),
@@ -298,7 +302,11 @@ def launch(request: HttpRequest) -> HttpResponse:
 def chat(request: HttpRequest) -> HttpResponse:
 	launch_data = request.session.get('lti_launch')
 	if not launch_data:
-		return HttpResponseBadRequest('No active LTI launch session found.')
+		return HttpResponse(
+			'No active LTI launch session found. Please launch the tool from Moodle again.',
+			content_type='text/plain',
+			status=200,
+		)
 
 	# role = 'admin' if 'Instructor' in launch_data.get('roles', '') else 'user'
 	role = 'user'

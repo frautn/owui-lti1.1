@@ -152,7 +152,10 @@ def _verify_signature(request: HttpRequest, params: Dict[str, str]) -> bool:
 
 def _build_openwebui_auth_url() -> str:
 	base = settings.OPENWEBUI_URL.rstrip('/')
-	return f'{base}/auth?redirect=/'
+	# OpenWebUI's explicit /auth page can surface the "trusted header" warning
+	# even when the LTI bridge already established a valid session via the API.
+	# Send the browser straight to the app root so the session cookie is used.
+	return f'{base}/'
 
 
 def _derive_lti_identity(launch_data: dict) -> tuple[str, str]:
@@ -297,7 +300,8 @@ def chat(request: HttpRequest) -> HttpResponse:
 	if not launch_data:
 		return HttpResponseBadRequest('No active LTI launch session found.')
 
-	role = 'admin' if 'Instructor' in launch_data.get('roles', '') else 'user'
+	# role = 'admin' if 'Instructor' in launch_data.get('roles', '') else 'user'
+	role = 'user'
 	email, name = _derive_lti_identity(launch_data)
 	token, login_error = _openwebui_signin(email, name, role)
 	can_set_cookie = _can_set_openwebui_cookie(request, settings.OPENWEBUI_URL)

@@ -98,8 +98,9 @@ CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'None')
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
 
 # LTI launch URL normalization behavior behind proxies.
-LTI_TRUST_PROXY_HEADERS = os.getenv('LTI_TRUST_PROXY_HEADERS', 'True').lower() == 'true'
+LTI_TRUST_PROXY_HEADERS = os.getenv('LTI_TRUST_PROXY_HEADERS', 'False').lower() == 'true'
 LTI_EXTERNAL_LAUNCH_URL = os.getenv('LTI_EXTERNAL_LAUNCH_URL', '')
+LTI_SIGNATURE_DEBUG = os.getenv('LTI_SIGNATURE_DEBUG', 'False').lower() == 'true'
 
 # Open WebUI API configuration
 OPENWEBUI_API_KEY = openwebui_api_key

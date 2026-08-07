@@ -150,6 +150,26 @@ def _verify_signature(request: HttpRequest, params: Dict[str, str]) -> bool:
 	return hmac.compare_digest(expected_signature, params['oauth_signature'])
 
 
+def _signature_debug_hint(request: HttpRequest, params: Dict[str, str]) -> str:
+	"""Return a safe hint to diagnose launch URL mismatches without exposing secrets."""
+	scheme, host, path = _normalized_launch_url_parts(request)
+	normalized_url = f'{scheme}://{host}{path}'
+	reference_tool_url = request.build_absolute_uri(request.path)
+
+	base_hint = (
+		f'Verification used normalized URL {normalized_url}. '
+		f'Request URL was {reference_tool_url}. '
+	)
+
+	external_launch_url = getattr(settings, 'LTI_EXTERNAL_LAUNCH_URL', '').strip()
+	if external_launch_url:
+		base_hint += 'LTI_EXTERNAL_LAUNCH_URL is set. Ensure Moodle Tool URL exactly matches it (including scheme, host, port, path, trailing slash).'
+	else:
+		base_hint += 'Set LTI_EXTERNAL_LAUNCH_URL to the exact Moodle Tool URL to avoid proxy/path mismatches.'
+
+	return base_hint
+
+
 def _build_openwebui_auth_url() -> str:
 	base = settings.OPENWEBUI_URL.rstrip('/')
 	# OpenWebUI's explicit /auth page can surface the "trusted header" warning
@@ -278,7 +298,10 @@ def launch(request: HttpRequest) -> HttpResponse:
 		return HttpResponse(f'Invalid LTI launch: {validation_error}', content_type='text/plain', status=200)
 
 	if not _verify_signature(request, params):
-		return HttpResponse('OAuth signature validation failed.', content_type='text/plain', status=200)
+		message = 'OAuth signature validation failed.'
+		if getattr(settings, 'LTI_SIGNATURE_DEBUG', False):
+			message = f'{message} {_signature_debug_hint(request, params)}'
+		return HttpResponse(message, content_type='text/plain', status=200)
 
 	if not _validate_nonce(
 		params['oauth_consumer_key'], params['oauth_nonce'], params['oauth_timestamp']

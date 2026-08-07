@@ -48,7 +48,16 @@ Optional production values for reverse proxy deployments:
 - `LTI_TRUST_PROXY_HEADERS` (default `True`)
 - `LTI_EXTERNAL_LAUNCH_URL` (for example `https://lti.example.edu/lti/launch/`)
 
+Optional troubleshooting value:
+
+- `LTI_SIGNATURE_DEBUG` (default `False`) to include launch URL normalization hints in `OAuth signature validation failed.` responses.
+
 Use `LTI_EXTERNAL_LAUNCH_URL` when Moodle signs launches against a public URL that differs from the internal Django URL seen by the app.
+
+Localhost tip:
+
+- For local development (no reverse proxy), prefer `LTI_TRUST_PROXY_HEADERS=False`.
+- If you still get signature errors, set `LTI_EXTERNAL_LAUNCH_URL` to the exact Moodle Tool URL, including scheme, host, port, path, and trailing slash. Example: `http://localhost:9001/lti/launch/`.
 
 ## Run
 

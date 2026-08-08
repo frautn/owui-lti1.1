@@ -21,7 +21,6 @@ import requests
 from typing import List, Optional, Dict, Any
 
 
-
 REQUIRED_LTI_FIELDS = (
 	'lti_version',
 	'lti_message_type',
@@ -182,6 +181,49 @@ def _build_openwebui_auth_url() -> str:
 	return f'{base}/'
 
 
+def _build_safe_local_fallback_url() -> str:
+	# Keep fallback inside Django to avoid exposing OpenWebUI auth warnings.
+	return '/django/lti/health/'
+
+
+def _openwebui_signin_with_retry(
+	email: str,
+	name: str,
+	role: str,
+	attempts: int = 2,
+	delay_seconds: float = 0.35,
+) -> tuple[str | None, str | None]:
+	last_error: str | None = None
+
+	for attempt in range(attempts):
+		token, error = _openwebui_signin(email, name, role)
+		if token:
+			return token, None
+
+		last_error = error
+		if attempt < attempts - 1:
+			time.sleep(delay_seconds)
+
+	return None, last_error
+
+
+def _create_chat_with_retry(
+	auth_token: str,
+	models: list[str],
+	attempts: int = 2,
+	delay_seconds: float = 0.35,
+) -> str | None:
+	for attempt in range(attempts):
+		chat_id = create_openwebui_chat(auth_token=auth_token, models=models)
+		if chat_id:
+			return chat_id
+
+		if attempt < attempts - 1:
+			time.sleep(delay_seconds)
+
+	return None
+
+
 def _derive_lti_identity(launch_data: dict) -> tuple[str, str]:
 	email = (launch_data.get('lis_person_contact_email_primary') or '').strip().lower()
 	if not email:
@@ -339,6 +381,7 @@ def create_openwebui_chat(
 
     Returns the created chat_id (str) or None if the request failed.
     """
+
     url = f"{settings.OPENWEBUI_URL.rstrip('/')}/api/v1/chats/new"
     
     headers = {
@@ -380,6 +423,7 @@ def create_openwebui_chat(
 
 
 def chat(request: HttpRequest) -> HttpResponse:
+
 	launch_data = request.session.get('lti_launch')
 	if not launch_data:
 		return HttpResponse(
@@ -391,7 +435,7 @@ def chat(request: HttpRequest) -> HttpResponse:
 	# role = 'admin' if 'Instructor' in launch_data.get('roles', '') else 'user'
 	role = 'user'
 	email, name = _derive_lti_identity(launch_data)
-	token, login_error = _openwebui_signin(email, name, role)
+	token, login_error = _openwebui_signin_with_retry(email, name, role)
 	can_set_cookie = _can_set_openwebui_cookie(request, settings.OPENWEBUI_URL)
 
 	if token and not can_set_cookie:
@@ -402,30 +446,44 @@ def chat(request: HttpRequest) -> HttpResponse:
 
 	chat_id = None
 
-	if token:
-		# Define course-specific parameters from LTI launch_data
-		course_title = launch_data.get('context_title', 'Course Chat')
-		system_prompt = f"You are an AI teaching assistant for the course '{course_title}'. Always end your response with 'Hooray!'."
+	# 	# Define course-specific parameters from LTI launch_data
+	# 	course_title = launch_data.get('context_title', 'Course Chat')
+	# 	system_prompt = f"You are an AI teaching assistant for the course '{course_title}'. Always end your response with 'Hooray!'."
         
-        # Optional: IDs of uploaded files or knowledge bases in Open WebUI
-		attached_file_ids = []  # e.g., ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
+    #     # Optional: IDs of uploaded files or knowledge bases in Open WebUI
+	# 	attached_file_ids = []  # e.g., ["3fa85f64-5717-4562-b3fc-2c963f66afa6"]
 
-        # Create the session via API
-		chat_id = create_openwebui_chat(
-            auth_token=token,
-            models=["UTNFRA-F2"],  # Specify target model ID
-            system_prompt=system_prompt,
-            title=f"LTI Chat - {course_title}",
-            file_ids=attached_file_ids,
-        )
+    #     # Create the session via API
+	# 	chat_id = create_openwebui_chat(
+    #         auth_token=token,
+    #         models=["UTNFRA"],  # Specify target model ID
+    #         system_prompt=system_prompt,
+    #         title=f"LTI Chat - {course_title}",
+    #         file_ids=attached_file_ids,
+    #     )
+
+	if token:
+		chat_id = _create_chat_with_retry(
+			auth_token=token,
+			models=["utnfra"],  # Specify target model ID
+		)
+		if not chat_id and not login_error:
+			login_error = (
+				'We could not open your chat session right now. '
+				'Please relaunch the activity from Moodle.'
+			)
+	elif not login_error:
+		login_error = (
+			'Automatic sign-in could not be completed right now. '
+			'Please relaunch the activity from Moodle.'
+		)
 
     # Build iframe URL pointing directly to the generated chat ID
 	if chat_id:
 		iframe_url = f"{settings.OPENWEBUI_URL.rstrip('/')}/c/{chat_id}"
 	else:
-		iframe_url = _build_openwebui_auth_url()
+		iframe_url = _build_safe_local_fallback_url()
 
-	print(iframe_url)
 	context = {
 		'openwebui_auth_url': iframe_url,
 		'autologin_error': login_error,

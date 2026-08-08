@@ -1,4 +1,5 @@
 other/
+logs/
 
 # Python bytecode
 __pycache__/

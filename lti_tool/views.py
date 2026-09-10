@@ -175,6 +175,9 @@ def _build_openwebui_auth_url() -> str:
 	# OpenWebUI's explicit /auth page can surface the "trusted header" warning
 	# even when the LTI bridge already established a valid session via the API.
 	# Send the browser straight to the app root so the session cookie is used.
+	model = getattr(settings, 'OPENWEBUI_DEFAULT_MODEL', '').strip()
+	if model:
+		return f'{base}/?model={quote(model, safe="")}'
 	return f'{base}/'
 
 
